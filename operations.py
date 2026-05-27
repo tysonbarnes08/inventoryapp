@@ -495,7 +495,7 @@ Stats:
             try:
                 client = anthropic.Anthropic(api_key=st.secrets["ANTHROPIC_API_KEY"])
                 response = client.messages.create(
-                    model="claude-sonnet-4-20250514",
+                    model="claude-sonnet-4-5",
                     max_tokens=1024,
                     system=system_prompt,
                     messages=st.session_state.ai_messages
