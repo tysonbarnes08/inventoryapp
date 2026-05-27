@@ -1,8 +1,10 @@
 import streamlit as st
-import plotly.express as px
 import plotly.graph_objects as go
 import pandas as pd
-
+import json
+import os
+import anthropic
+from datetime import date
 
 # ─── Page Config ─────────────────────────────────────────────────────────────
 st.set_page_config(
@@ -25,7 +27,6 @@ html, body, [class*="css"] {
 
 .stApp { background: #050508; }
 
-/* Wordmark */
 .wordmark {
     font-size: 1.6rem;
     font-weight: 800;
@@ -36,7 +37,6 @@ html, body, [class*="css"] {
     margin-bottom: 0.25rem;
 }
 
-/* Stat cards */
 .stat-card {
     background: #0f0f14;
     border: 1px solid rgba(255,255,255,0.07);
@@ -71,7 +71,6 @@ html, body, [class*="css"] {
 .stat-num { font-size: 2rem; font-weight: 800; line-height: 1; margin-bottom: 0.2rem; }
 .stat-sub { font-size: 0.7rem; color: #475569; }
 
-/* Table styles */
 .inv-table { width: 100%; border-collapse: collapse; }
 .inv-table th {
     font-family: 'IBM Plex Mono', monospace;
@@ -102,11 +101,6 @@ html, body, [class*="css"] {
     font-weight: 600;
 }
 
-.status-ok { color: #4ade80; }
-.status-low { color: #fbbf24; }
-.status-out { color: #f87171; }
-
-/* AI message bubbles */
 .ai-msg-user {
     background: rgba(129,140,248,0.1);
     border: 1px solid rgba(129,140,248,0.2);
@@ -130,13 +124,11 @@ html, body, [class*="css"] {
     line-height: 1.6;
 }
 
-/* Sidebar */
 section[data-testid="stSidebar"] {
     background: #080810 !important;
     border-right: 1px solid rgba(255,255,255,0.05);
 }
 
-/* Inputs */
 .stTextInput input, .stNumberInput input, .stSelectbox select {
     background: rgba(255,255,255,0.04) !important;
     border: 1px solid rgba(255,255,255,0.08) !important;
@@ -144,7 +136,6 @@ section[data-testid="stSidebar"] {
     border-radius: 6px !important;
 }
 
-/* Buttons */
 .stButton button {
     font-family: 'IBM Plex Mono', monospace !important;
     font-size: 0.7rem !important;
@@ -153,7 +144,6 @@ section[data-testid="stSidebar"] {
     border-radius: 6px !important;
 }
 
-/* Tabs */
 .stTabs [data-baseweb="tab-list"] {
     background: transparent !important;
     border-bottom: 1px solid rgba(255,255,255,0.06);
@@ -168,27 +158,37 @@ section[data-testid="stSidebar"] {
 }
 .stTabs [aria-selected="true"] { color: #818cf8 !important; }
 
-/* Dividers */
 hr { border-color: rgba(255,255,255,0.05) !important; }
 
-/* Scrollbar */
 ::-webkit-scrollbar { width: 4px; }
 ::-webkit-scrollbar-track { background: transparent; }
 ::-webkit-scrollbar-thumb { background: rgba(129,140,248,0.2); border-radius: 2px; }
 </style>
 """, unsafe_allow_html=True)
 
-# ─── Initial Data ────────────────────────────────────────────────────────────
+# ─── Save / Load ─────────────────────────────────────────────────────────────
+SAVE_FILE = "inventory_save.json"
+
 INITIAL_ITEMS = [
-    {"id": 1, "name": "Wireless Keyboard",       "sku": "TECH-001", "category": "Electronics", "qty": 45, "price": 79.99,  "supplier": "TechCorp",   "threshold": 10},
-    {"id": 2, "name": "Ergonomic Chair",          "sku": "FURN-002", "category": "Furniture",   "qty": 8,  "price": 349.00, "supplier": "OfficeWorld", "threshold": 5},
-    {"id": 3, "name": "USB-C Hub",                "sku": "TECH-003", "category": "Electronics", "qty": 3,  "price": 59.99,  "supplier": "TechCorp",   "threshold": 10},
-    {"id": 4, "name": "Standing Desk",            "sku": "FURN-004", "category": "Furniture",   "qty": 12, "price": 599.00, "supplier": "OfficeWorld", "threshold": 3},
-    {"id": 5, "name": "Laptop Stand",             "sku": "TECH-005", "category": "Electronics", "qty": 27, "price": 44.99,  "supplier": "GadgetHub",  "threshold": 8},
-    {"id": 6, "name": "Noise-Cancel Headphones",  "sku": "TECH-006", "category": "Electronics", "qty": 0,  "price": 199.99, "supplier": "SoundCo",    "threshold": 5},
-    {"id": 7, "name": "Monitor Arm",              "sku": "TECH-007", "category": "Electronics", "qty": 19, "price": 89.00,  "supplier": "GadgetHub",  "threshold": 6},
-    {"id": 8, "name": "Storage Cabinet",          "sku": "FURN-008", "category": "Furniture",   "qty": 4,  "price": 229.00, "supplier": "OfficeWorld", "threshold": 3},
+    {"id": 1, "name": "Wireless Keyboard",      "sku": "TECH-001", "category": "Electronics", "qty": 45, "price": 79.99,  "supplier": "TechCorp",    "threshold": 10},
+    {"id": 2, "name": "Ergonomic Chair",         "sku": "FURN-002", "category": "Furniture",   "qty": 8,  "price": 349.00, "supplier": "OfficeWorld", "threshold": 5},
+    {"id": 3, "name": "USB-C Hub",               "sku": "TECH-003", "category": "Electronics", "qty": 3,  "price": 59.99,  "supplier": "TechCorp",    "threshold": 10},
+    {"id": 4, "name": "Standing Desk",           "sku": "FURN-004", "category": "Furniture",   "qty": 12, "price": 599.00, "supplier": "OfficeWorld", "threshold": 3},
+    {"id": 5, "name": "Laptop Stand",            "sku": "TECH-005", "category": "Electronics", "qty": 27, "price": 44.99,  "supplier": "GadgetHub",   "threshold": 8},
+    {"id": 6, "name": "Noise-Cancel Headphones", "sku": "TECH-006", "category": "Electronics", "qty": 0,  "price": 199.99, "supplier": "SoundCo",     "threshold": 5},
+    {"id": 7, "name": "Monitor Arm",             "sku": "TECH-007", "category": "Electronics", "qty": 19, "price": 89.00,  "supplier": "GadgetHub",   "threshold": 6},
+    {"id": 8, "name": "Storage Cabinet",         "sku": "FURN-008", "category": "Furniture",   "qty": 4,  "price": 229.00, "supplier": "OfficeWorld", "threshold": 3},
 ]
+
+def load_inventory():
+    if os.path.exists(SAVE_FILE):
+        with open(SAVE_FILE, "r") as f:
+            return json.load(f)
+    return [dict(i) for i in INITIAL_ITEMS]
+
+def save_inventory(items):
+    with open(SAVE_FILE, "w") as f:
+        json.dump(items, f)
 
 CATEGORY_COLORS = {
     "Electronics": "#818cf8",
@@ -202,21 +202,26 @@ PLOT_BG   = "#080810"
 PLOT_GRID = "rgba(255,255,255,0.04)"
 
 def get_status(item):
-    if item["qty"] == 0:            return "out",  "#f87171", "OUT OF STOCK"
-    if item["qty"] <= item["threshold"]: return "low",  "#fbbf24", f"LOW (min {item['threshold']})"
+    if item["qty"] == 0:
+        return "out", "#f87171", "OUT OF STOCK"
+    if item["qty"] <= item["threshold"]:
+        return "low", "#fbbf24", f"LOW (min {item['threshold']})"
     return "ok", "#4ade80", "In Stock"
 
 # ─── Session State ────────────────────────────────────────────────────────────
 if "inventory" not in st.session_state:
-    st.session_state.inventory = [dict(i) for i in INITIAL_ITEMS]
+    st.session_state.inventory = load_inventory()
 if "next_id" not in st.session_state:
-    st.session_state.next_id = 9
+    all_ids = [i["id"] for i in st.session_state.inventory]
+    st.session_state.next_id = max(all_ids) + 1 if all_ids else 1
 if "show_add" not in st.session_state:
     st.session_state.show_add = False
 if "edit_id" not in st.session_state:
     st.session_state.edit_id = None
 if "delete_id" not in st.session_state:
     st.session_state.delete_id = None
+if "ai_messages" not in st.session_state:
+    st.session_state.ai_messages = []
 
 items = st.session_state.inventory
 
@@ -227,12 +232,15 @@ low_stock    = sum(1 for i in items if 0 < i["qty"] <= i["threshold"])
 out_of_stock = sum(1 for i in items if i["qty"] == 0)
 
 # ─── Header ───────────────────────────────────────────────────────────────────
-col_logo, col_date, col_add = st.columns([3, 2, 1])
+col_logo, col_date, col_save, col_add = st.columns([3, 2, 1, 1])
 with col_logo:
-    st.markdown('<div class="wordmark">WELCOME TO DO SWAG INVNTRY</div>', unsafe_allow_html=True)
-with col_date:    
-    from datetime import date
+    st.markdown('<div class="wordmark">WELCOME TO SWAG INVNTRY</div>', unsafe_allow_html=True)
+with col_date:
     st.markdown(f'<p style="color:#334155;font-family:\'IBM Plex Mono\',monospace;font-size:0.7rem;margin-top:0.9rem">{date.today().strftime("%b %d, %Y")}</p>', unsafe_allow_html=True)
+with col_save:
+    if st.button("💾 Save", use_container_width=True):
+        save_inventory(items)
+        st.toast("Inventory saved!", icon="✅")
 with col_add:
     if st.button("＋ Add Item", type="primary", use_container_width=True):
         st.session_state.show_add = True
@@ -274,14 +282,13 @@ with s4:
 st.markdown("<div style='height:1.25rem'></div>", unsafe_allow_html=True)
 
 # ─── Tabs ─────────────────────────────────────────────────────────────────────
-tab_inv, tab_analytics = st.tabs(["INVENTORY", "ANALYTICS"])
+tab_inv, tab_analytics, tab_ai = st.tabs(["INVENTORY", "ANALYTICS", "AI ASSISTANT"])
 
 # ════════════════════════════════════════════════════════════════════════════
 # INVENTORY TAB
 # ════════════════════════════════════════════════════════════════════════════
 with tab_inv:
     with st.container():
-        # ── Sidebar-style filters inside column ──────────────────────────────
         f1, f2, f3 = st.columns([2, 1.5, 1.5])
         with f1:
             search = st.text_input("🔍 Search", placeholder="Name, SKU, supplier…", label_visibility="collapsed")
@@ -291,7 +298,6 @@ with tab_inv:
         with f3:
             stock_filter = st.selectbox("Stock", ["All", "In Stock", "Low Stock", "Out of Stock"], label_visibility="collapsed")
 
-        # ── Filter items ─────────────────────────────────────────────────────
         filtered = []
         for item in items:
             q = search.lower()
@@ -300,8 +306,8 @@ with tab_inv:
             status_key, _, _ = get_status(item)
             match_stock = (
                 stock_filter == "All" or
-                (stock_filter == "In Stock"    and status_key == "ok")  or
-                (stock_filter == "Low Stock"   and status_key == "low") or
+                (stock_filter == "In Stock"     and status_key == "ok")  or
+                (stock_filter == "Low Stock"    and status_key == "low") or
                 (stock_filter == "Out of Stock" and status_key == "out")
             )
             if match_search and match_cat and match_stock:
@@ -309,7 +315,6 @@ with tab_inv:
 
         st.markdown(f'<p style="font-family:\'IBM Plex Mono\',monospace;font-size:0.65rem;color:#334155;margin:0.25rem 0 0.75rem">{len(filtered)} items</p>', unsafe_allow_html=True)
 
-        # ── Table ─────────────────────────────────────────────────────────────
         if not filtered:
             st.markdown('<p style="text-align:center;color:#334155;padding:2rem">No items match your filters.</p>', unsafe_allow_html=True)
         else:
@@ -332,7 +337,8 @@ with tab_inv:
                     <span style="color:{color};font-family:'IBM Plex Mono',monospace;font-size:1rem;font-weight:500">
                       ● {item['qty']}
                     </span>
-{('<br><span style="font-family:IBM Plex Mono,monospace;font-size:0.6rem;color:' + color + ';opacity:0.8">' + status_label + '</span>') if status_key != 'ok' else ''}                  </td>
+                    {('<br><span style="font-family:IBM Plex Mono,monospace;font-size:0.6rem;color:' + color + ';opacity:0.8">' + status_label + '</span>') if status_key != 'ok' else ''}
+                  </td>
                   <td style="font-family:'IBM Plex Mono',monospace;color:#94a3b8">${item['price']:.2f}</td>
                   <td style="color:#64748b;font-size:0.8rem">{item['supplier']}</td>
                 </tr>"""
@@ -345,7 +351,6 @@ with tab_inv:
               <tbody>{rows_html}</tbody>
             </table>""", unsafe_allow_html=True)
 
-        # ── Inline edit / qty controls ────────────────────────────────────────
         st.markdown("<div style='height:1rem'></div>", unsafe_allow_html=True)
         st.markdown('<p style="font-family:\'IBM Plex Mono\',monospace;font-size:0.6rem;letter-spacing:0.15em;text-transform:uppercase;color:#334155">Quick Actions</p>', unsafe_allow_html=True)
 
@@ -357,12 +362,14 @@ with tab_inv:
             with col_minus:
                 if st.button("−", key=f"minus_{item['id']}"):
                     item["qty"] = max(0, item["qty"] - 1)
+                    save_inventory(items)
                     st.rerun()
             with col_qty:
                 st.markdown(f'<span style="font-family:\'IBM Plex Mono\',monospace;color:{color};font-size:0.9rem">{item["qty"]}</span>', unsafe_allow_html=True)
             with col_plus:
                 if st.button("＋", key=f"plus_{item['id']}"):
                     item["qty"] += 1
+                    save_inventory(items)
                     st.rerun()
             with col_edit:
                 if st.button("✎", key=f"edit_{item['id']}"):
@@ -373,8 +380,6 @@ with tab_inv:
                 if st.button("✕", key=f"del_{item['id']}"):
                     st.session_state.delete_id = item["id"]
                     st.rerun()
-
-
 
 # ════════════════════════════════════════════════════════════════════════════
 # ANALYTICS TAB
@@ -387,7 +392,6 @@ with tab_analytics:
 
     c1, c2 = st.columns(2)
 
-    # Chart 1 — Qty by item
     with c1:
         st.markdown('<p style="font-family:\'IBM Plex Mono\',monospace;font-size:0.65rem;letter-spacing:0.12em;text-transform:uppercase;color:#475569">Quantity by Item</p>', unsafe_allow_html=True)
         df_sorted = df.sort_values("qty", ascending=False).head(8)
@@ -405,7 +409,6 @@ with tab_analytics:
         )
         st.plotly_chart(fig1, use_container_width=True)
 
-    # Chart 2 — Value by category
     with c2:
         st.markdown('<p style="font-family:\'IBM Plex Mono\',monospace;font-size:0.65rem;letter-spacing:0.12em;text-transform:uppercase;color:#475569">Value by Category</p>', unsafe_allow_html=True)
         cat_df = df.groupby("category")["value"].sum().reset_index()
@@ -426,7 +429,6 @@ with tab_analytics:
 
     c3, c4 = st.columns(2)
 
-    # Chart 3 — Category donut
     with c3:
         st.markdown('<p style="font-family:\'IBM Plex Mono\',monospace;font-size:0.65rem;letter-spacing:0.12em;text-transform:uppercase;color:#475569">Category Distribution</p>', unsafe_allow_html=True)
         cat_count = df.groupby("category").size().reset_index(name="count")
@@ -444,7 +446,6 @@ with tab_analytics:
         )
         st.plotly_chart(fig3, use_container_width=True)
 
-    # Chart 4 — Stock status + top value items
     with c4:
         st.markdown('<p style="font-family:\'IBM Plex Mono\',monospace;font-size:0.65rem;letter-spacing:0.12em;text-transform:uppercase;color:#475569">Stock Status Overview</p>', unsafe_allow_html=True)
         total = len(items)
@@ -472,7 +473,64 @@ with tab_analytics:
               <span style="font-family:'IBM Plex Mono',monospace;font-size:0.75rem;color:#34d399">${val:,.0f}</span>
             </div>""", unsafe_allow_html=True)
 
-# ─── Add / Edit Modal ─────────────────────────────────────────────────────────
+# ════════════════════════════════════════════════════════════════════════════
+# AI ASSISTANT TAB
+# ════════════════════════════════════════════════════════════════════════════
+with tab_ai:
+    st.markdown('<p style="font-family:\'IBM Plex Mono\',monospace;font-size:0.65rem;letter-spacing:0.12em;text-transform:uppercase;color:#475569;margin-bottom:1rem">AI Inventory Assistant</p>', unsafe_allow_html=True)
+
+    # Show chat history
+    for msg in st.session_state.ai_messages:
+        if msg["role"] == "user":
+            st.markdown(f'<div class="ai-msg-user">{msg["content"]}</div>', unsafe_allow_html=True)
+        else:
+            st.markdown(f'<div class="ai-msg-assistant">{msg["content"]}</div>', unsafe_allow_html=True)
+
+    # Input
+    user_input = st.chat_input("Ask about your inventory…")
+
+    if user_input:
+        # Build inventory context for the AI
+        inventory_summary = json.dumps(items, indent=2)
+        system_prompt = f"""You are a helpful inventory management assistant for INVNTRY. 
+You have access to the current inventory data below. Answer questions about stock levels, 
+values, suppliers, reorder suggestions, and any other inventory-related questions. 
+Be concise and helpful.
+
+Current Inventory:
+{inventory_summary}
+
+Stats:
+- Total SKUs: {total_skus}
+- Total Value: ${total_value:,.2f}
+- Low Stock Items: {low_stock}
+- Out of Stock Items: {out_of_stock}
+"""
+
+        st.session_state.ai_messages.append({"role": "user", "content": user_input})
+
+        with st.spinner("Thinking…"):
+            try:
+                client = anthropic.Anthropic(api_key=st.secrets["ANTHROPIC_API_KEY"])
+                response = client.messages.create(
+                    model="claude-sonnet-4-20250514",
+                    max_tokens=1024,
+                    system=system_prompt,
+                    messages=st.session_state.ai_messages
+                )
+                reply = response.content[0].text
+            except Exception as e:
+                reply = f"Error contacting AI: {str(e)}. Make sure your ANTHROPIC_API_KEY is set in Streamlit secrets."
+
+        st.session_state.ai_messages.append({"role": "assistant", "content": reply})
+        st.rerun()
+
+    if st.session_state.ai_messages:
+        if st.button("🗑 Clear Chat"):
+            st.session_state.ai_messages = []
+            st.rerun()
+
+# ─── Add / Edit Modal ────────────────────────────────────────────────────────
 show_form = st.session_state.show_add or st.session_state.edit_id is not None
 editing = next((i for i in items if i["id"] == st.session_state.edit_id), None) if st.session_state.edit_id else None
 
@@ -485,14 +543,14 @@ if show_form:
 
     fc1, fc2 = st.columns(2)
     with fc1:
-        f_name      = st.text_input("Item Name",          value=defaults["name"])
-        f_sku       = st.text_input("SKU",                value=defaults["sku"])
-        f_category  = st.text_input("Category",           value=defaults["category"])
+        f_name      = st.text_input("Item Name",             value=defaults["name"])
+        f_sku       = st.text_input("SKU",                   value=defaults["sku"])
+        f_category  = st.text_input("Category",              value=defaults["category"])
         f_threshold = st.number_input("Low Stock Threshold", value=int(defaults["threshold"]), min_value=0)
     with fc2:
-        f_qty       = st.number_input("Quantity",  value=int(defaults["qty"]),       min_value=0)
-        f_price     = st.number_input("Price ($)", value=float(defaults["price"]),   min_value=0.0, step=0.01, format="%.2f")
-        f_supplier  = st.text_input("Supplier",          value=defaults["supplier"])
+        f_qty      = st.number_input("Quantity",  value=int(defaults["qty"]),     min_value=0)
+        f_price    = st.number_input("Price ($)", value=float(defaults["price"]), min_value=0.0, step=0.01, format="%.2f")
+        f_supplier = st.text_input("Supplier",               value=defaults["supplier"])
 
     btn1, btn2, _ = st.columns([1, 1, 4])
     with btn1:
@@ -512,6 +570,7 @@ if show_form:
                     st.session_state.next_id += 1
                     items.append(new_item)
                     st.success("✓ Item added")
+                save_inventory(items)
                 st.session_state.show_add = False
                 st.session_state.edit_id = None
                 st.rerun()
@@ -532,6 +591,7 @@ if st.session_state.delete_id is not None:
         with db1:
             if st.button("🗑 Delete", type="primary"):
                 st.session_state.inventory = [i for i in items if i["id"] != del_item["id"]]
+                save_inventory(st.session_state.inventory)
                 st.session_state.delete_id = None
                 st.rerun()
         with db2:
