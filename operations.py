@@ -315,41 +315,23 @@ with tab_inv:
 
         st.markdown(f'<p style="font-family:\'IBM Plex Mono\',monospace;font-size:0.65rem;color:#334155;margin:0.25rem 0 0.75rem">{len(filtered)} items</p>', unsafe_allow_html=True)
 
-        if not filtered:
+       if not filtered:
             st.markdown('<p style="text-align:center;color:#334155;padding:2rem">No items match your filters.</p>', unsafe_allow_html=True)
         else:
-            rows_html = ""
+            table_data = []
             for item in filtered:
                 status_key, color, status_label = get_status(item)
-                cat_color = CATEGORY_COLORS.get(item["category"], "#94a3b8")
-                rows_html += f"""
-                <tr>
-                  <td>
-                    <div class="item-name">{item['name']}</div>
-                    <div class="item-sku">{item['sku']}</div>
-                  </td>
-                  <td>
-                    <span class="cat-pill" style="background:{cat_color}20;color:{cat_color};border:1px solid {cat_color}40">
-                      {item['category']}
-                    </span>
-                  </td>
-                  <td>
-                    <span style="color:{color};font-family:'IBM Plex Mono',monospace;font-size:1rem;font-weight:500">
-                      ● {item['qty']}
-                    </span>
-                    {('<br><span style="font-family:IBM Plex Mono,monospace;font-size:0.6rem;color:' + color + ';opacity:0.8">' + status_label + '</span>') if status_key != 'ok' else ''}
-                  </td>
-                  <td style="font-family:'IBM Plex Mono',monospace;color:#94a3b8">${item['price']:.2f}</td>
-                  <td style="color:#64748b;font-size:0.8rem">{item['supplier']}</td>
-                </tr>"""
-
-            st.markdown(f"""
-            <table class="inv-table">
-              <thead><tr>
-                <th>Item</th><th>Category</th><th>Qty</th><th>Price</th><th>Supplier</th>
-              </tr></thead>
-              <tbody>{rows_html}</tbody>
-            </table>""", unsafe_allow_html=True)
+                table_data.append({
+                    "Item": item["name"],
+                    "SKU": item["sku"],
+                    "Category": item["category"],
+                    "Qty": item["qty"],
+                    "Status": status_label,
+                    "Price": f"${item['price']:.2f}",
+                    "Supplier": item["supplier"],
+                })
+            df_table = pd.DataFrame(table_data)
+            st.dataframe(df_table, use_container_width=True, hide_index=True)
 
         st.markdown("<div style='height:1rem'></div>", unsafe_allow_html=True)
         st.markdown('<p style="font-family:\'IBM Plex Mono\',monospace;font-size:0.6rem;letter-spacing:0.15em;text-transform:uppercase;color:#334155">Quick Actions</p>', unsafe_allow_html=True)
