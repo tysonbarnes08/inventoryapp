@@ -315,7 +315,7 @@ with tab_inv:
 
         st.markdown(f'<p style="font-family:\'IBM Plex Mono\',monospace;font-size:0.65rem;color:#334155;margin:0.25rem 0 0.75rem">{len(filtered)} items</p>', unsafe_allow_html=True)
 
-       if not filtered:
+        if not filtered:
             st.markdown('<p style="text-align:center;color:#334155;padding:2rem">No items match your filters.</p>', unsafe_allow_html=True)
         else:
             table_data = []
