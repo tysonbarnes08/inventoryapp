@@ -1,0 +1,11 @@
+credentials:
+  usernames:
+    admin:
+      email: admin@invntry.com
+      name: Admin 1
+      password: "$2b$12$atPEW45mf1qTv0WvId2IYuiLl0RXwasUvW06kU7nhJXk7VhprlvI6"
+
+cookie:
+  expiry_days: 5
+  key: supersecretrandomkey123
+  name: inventory_app_cookie
