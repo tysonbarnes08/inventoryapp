@@ -4,41 +4,7 @@ import pandas as pd
 import json
 import os
 import anthropic
-import yaml
-from yaml.loader import SafeLoader
-import streamlit_authenticator as stauth
 from datetime import date
-
-# ─── Page Config ─────────────────────────────────────────────────────────────
-st.set_page_config(
-    page_title="INVNTRY",
-    page_icon="📦",
-    layout="wide",
-    initial_sidebar_state="expanded"
-)
-
-# ─── Login Gate ───────────────────────────────────────────────────────────────
-with open("config.yaml") as file:
-    config = yaml.load(file, Loader=SafeLoader)
-
-authenticator = stauth.Authenticate(
-    config["credentials"],
-    config["cookie"]["name"],
-    config["cookie"]["key"],
-    config["cookie"]["expiry_days"]
-)
-
-authenticator.login("main")
-name = st.session_state.get("name")
-authentication_status = st.session_state.get("authentication_status")
-username = st.session_state.get("username")
-
-if authentication_status == False:
-    st.error("Username or password is incorrect")
-    st.stop()
-elif authentication_status == None:
-    st.warning("Please enter your login information")
-    st.stop()
 
 # ─── Page Config ─────────────────────────────────────────────────────────────
 st.set_page_config(
