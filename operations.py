@@ -9,6 +9,14 @@ from yaml.loader import SafeLoader
 import streamlit_authenticator as stauth
 from datetime import date
 
+# ─── Page Config ─────────────────────────────────────────────────────────────
+st.set_page_config(
+    page_title="INVNTRY",
+    page_icon="📦",
+    layout="wide",
+    initial_sidebar_state="expanded"
+)
+
 # ─── Login Gate ───────────────────────────────────────────────────────────────
 with open("config.yaml") as file:
     config = yaml.load(file, Loader=SafeLoader)
