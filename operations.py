@@ -355,7 +355,7 @@ with tab_inv:
             if match_search and match_cat and match_stock:
                 filtered.append(item)
 
-        st.markdown(f'<p style="font-family:\'IBM Plex Mono\',monospace;font-size:0.99rem;color:#ffffff;margin:0.25rem 0 0.75rem">{len(filtered)} items</p>', unsafe_allow_html=True)
+        st.markdown(f'<p style="font-family:\'IBM Plex Mono\',monospace;font-size:0.98rem;color:#ffffff;margin:0.25rem 0 0.75rem">{len(filtered)} items</p>', unsafe_allow_html=True)
 
         if not filtered:
             st.markdown('<p style="text-align:center;color:#334155;padding:2rem">No items match your filters.</p>', unsafe_allow_html=True)
