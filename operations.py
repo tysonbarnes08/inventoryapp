@@ -355,7 +355,7 @@ with tab_inv:
             if match_search and match_cat and match_stock:
                 filtered.append(item)
 
-        st.markdown(f'<p style="font-family:\'IBM Plex Mono\',monospace;font-size:0.65rem;color:#334155;margin:0.25rem 0 0.75rem">{len(filtered)} items</p>', unsafe_allow_html=True)
+        st.markdown(f'<p style="font-family:\'IBM Plex Mono\',monospace;font-size:0.65rem;color:#ffffff;margin:0.25rem 0 0.75rem">{len(filtered)} items</p>', unsafe_allow_html=True)
 
         if not filtered:
             st.markdown('<p style="text-align:center;color:#334155;padding:2rem">No items match your filters.</p>', unsafe_allow_html=True)
@@ -376,7 +376,7 @@ with tab_inv:
             st.dataframe(df_table, use_container_width=True, hide_index=True)
 
         st.markdown("<div style='height:1rem'></div>", unsafe_allow_html=True)
-        st.markdown('<p style="font-family:\'IBM Plex Mono\',monospace;font-size:0.6rem;letter-spacing:0.15em;text-transform:uppercase;color:#334155">Quick Actions</p>', unsafe_allow_html=True)
+        st.markdown('<p style="font-family:\'IBM Plex Mono\',monospace;font-size:0.6rem;letter-spacing:0.15em;text-transform:uppercase;color:#ffffff">Quick Actions</p>', unsafe_allow_html=True)
 
         for item in filtered:
             _, col_name, col_minus, col_qty, col_plus, col_edit, col_del = st.columns([0.1, 2.5, 0.4, 0.5, 0.4, 0.4, 0.4])
