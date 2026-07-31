@@ -213,10 +213,21 @@ def load_inventory():
         if not records:
             save_inventory(INITIAL_ITEMS)
             return [dict(i) for i in INITIAL_ITEMS]
+        cleaned = []
         for r in records:
-            r["qty"] = int(r["qty"]); r["price"] = float(r["price"])
-            r["threshold"] = int(r["threshold"]); r["id"] = int(r["id"])
-        return records
+            # normalize keys in case of stray spaces/capitalization in the sheet
+            r = {str(k).strip().lower(): v for k, v in r.items()}
+            cleaned.append({
+                "id": int(r.get("id") or 0),
+                "name": r.get("name", ""),
+                "sku": r.get("sku", ""),
+                "category": r.get("category", ""),
+                "qty": int(r.get("qty") or 0),
+                "price": float(r.get("price") or 0),
+                "supplier": r.get("supplier", ""),
+                "threshold": int(r.get("threshold") or 0),
+            })
+        return cleaned
     except Exception as e:
         st.warning(f"Could not load from Google Sheets: {e}")
         return [dict(i) for i in INITIAL_ITEMS]
@@ -355,7 +366,7 @@ with tab_inv:
             if match_search and match_cat and match_stock:
                 filtered.append(item)
 
-        st.markdown(f'<p style="font-family:\'IBM Plex Mono\',monospace;font-size:0.98rem;color:#ffffff;margin:0.25rem 0 0.75rem">{len(filtered)} items</p>', unsafe_allow_html=True)
+        st.markdown(f'<p style="font-family:\'IBM Plex Mono\',monospace;font-size:1.3rem;font-weight:700;letter-spacing:0.02em;color:#fbbf24;margin:0.25rem 0 0.75rem">{len(filtered)} items</p>', unsafe_allow_html=True)
 
         if not filtered:
             st.markdown('<p style="text-align:center;color:#334155;padding:2rem">No items match your filters.</p>', unsafe_allow_html=True)
@@ -376,7 +387,7 @@ with tab_inv:
             st.dataframe(df_table, use_container_width=True, hide_index=True)
 
         st.markdown("<div style='height:1rem'></div>", unsafe_allow_html=True)
-        st.markdown('<p style="font-family:\'IBM Plex Mono\',monospace;font-size:0.9rem;letter-spacing:0.15em;text-transform:uppercase;color:#ffffff">Quick Actions</p>', unsafe_allow_html=True)
+        st.markdown('<p style="font-family:\'IBM Plex Mono\',monospace;font-size:1.3rem;font-weight:700;letter-spacing:0.1em;text-transform:uppercase;color:#fbbf24">Quick Actions</p>', unsafe_allow_html=True)
 
         for item in filtered:
             _, col_name, col_minus, col_qty, col_plus, col_edit, col_del = st.columns([0.1, 2.5, 0.4, 0.5, 0.4, 0.4, 0.4])
