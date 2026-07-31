@@ -4,6 +4,8 @@ import pandas as pd
 import json
 import os
 import anthropic
+import gspread
+from google.oauth2.service_account import Credentials
 from datetime import date
 
 # ─── Page Config ─────────────────────────────────────────────────────────────
@@ -13,6 +15,24 @@ st.set_page_config(
     layout="wide",
     initial_sidebar_state="expanded"
 )
+
+# ─── Login Gate ───────────────────────────────────────────────────────────────
+if "authenticated" not in st.session_state:
+    st.session_state.authenticated = False
+
+if not st.session_state.authenticated:
+    st.markdown("<h2 style='text-align:center;color:#818cf8;margin-top:5rem'>INVNTRY</h2>", unsafe_allow_html=True)
+    st.markdown("<p style='text-align:center;color:#475569;margin-bottom:2rem'>Enter your password to continue</p>", unsafe_allow_html=True)
+    col1, col2, col3 = st.columns([1,1,1])
+    with col2:
+        password = st.text_input("Password", type="password")
+        if st.button("Login", use_container_width=True):
+            if password == st.secrets["APP_PASSWORD"]:
+                st.session_state.authenticated = True
+                st.rerun()
+            else:
+                st.error("Incorrect password")
+    st.stop()
 
 # ─── Custom CSS ───────────────────────────────────────────────────────────────
 st.markdown("""
@@ -166,8 +186,14 @@ hr { border-color: rgba(255,255,255,0.05) !important; }
 </style>
 """, unsafe_allow_html=True)
 
-# ─── Save / Load ─────────────────────────────────────────────────────────────
-SAVE_FILE = "inventory_save.json"
+# ─── Google Sheets Setup ─────────────────────────────────────────────────────
+SCOPES = ["https://www.googleapis.com/auth/spreadsheets", "https://www.googleapis.com/auth/drive"]
+
+@st.cache_resource
+def get_sheet():
+    creds = Credentials.from_service_account_info(st.secrets["gcp_service_account"], scopes=SCOPES)
+    client = gspread.authorize(creds)
+    return client.open_by_key(st.secrets["SHEET_ID"]).sheet1
 
 INITIAL_ITEMS = [
     {"id": 1, "name": "Wireless Keyboard",      "sku": "TECH-001", "category": "Electronics", "qty": 45, "price": 79.99,  "supplier": "TechCorp",    "threshold": 10},
@@ -181,14 +207,30 @@ INITIAL_ITEMS = [
 ]
 
 def load_inventory():
-    if os.path.exists(SAVE_FILE):
-        with open(SAVE_FILE, "r") as f:
-            return json.load(f)
-    return [dict(i) for i in INITIAL_ITEMS]
+    try:
+        sheet = get_sheet()
+        records = sheet.get_all_records()
+        if not records:
+            save_inventory(INITIAL_ITEMS)
+            return [dict(i) for i in INITIAL_ITEMS]
+        for r in records:
+            r["qty"] = int(r["qty"]); r["price"] = float(r["price"])
+            r["threshold"] = int(r["threshold"]); r["id"] = int(r["id"])
+        return records
+    except Exception as e:
+        st.warning(f"Could not load from Google Sheets: {e}")
+        return [dict(i) for i in INITIAL_ITEMS]
 
 def save_inventory(items):
-    with open(SAVE_FILE, "w") as f:
-        json.dump(items, f)
+    try:
+        sheet = get_sheet()
+        sheet.clear()
+        sheet.append_row(["id", "name", "sku", "category", "qty", "price", "supplier", "threshold"])
+        for item in items:
+            sheet.append_row([item["id"], item["name"], item["sku"], item["category"],
+                              item["qty"], item["price"], item["supplier"], item["threshold"]])
+    except Exception as e:
+        st.warning(f"Could not save to Google Sheets: {e}")
 
 CATEGORY_COLORS = {
     "Electronics": "#818cf8",
@@ -495,7 +537,7 @@ Stats:
             try:
                 client = anthropic.Anthropic(api_key=st.secrets["ANTHROPIC_API_KEY"])
                 response = client.messages.create(
-                    model="claude-sonnet-4-20250514",
+                    model="claude-sonnet-4-5",
                     max_tokens=1024,
                     system=system_prompt,
                     messages=st.session_state.ai_messages
